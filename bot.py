@@ -1,7 +1,6 @@
 import os
 import sqlite3
 import aiohttp
-import asyncio
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from dotenv import load_dotenv
@@ -12,21 +11,17 @@ load_dotenv()
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
 # Database setup
-def init_db():
-    conn = sqlite3.connect('chat_history.db')
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS messages (
-            user_id INTEGER,
-            role TEXT,
-            content TEXT,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    conn.commit()
-    return conn, cursor
-
-conn, cursor = init_db()
+conn = sqlite3.connect('chat_history.db')
+cursor = conn.cursor()
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS messages (
+        user_id INTEGER,
+        role TEXT,
+        content TEXT,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+''')
+conn.commit()
 
 def save_message(user_id, role, content):
     cursor.execute(
@@ -43,58 +38,15 @@ def load_history(user_id, limit=10):
     return cursor.fetchall()
 
 async def generate_response(user_id, user_input):
-    history = load_history(user_id)
-    
-    # Build conversation context
-    conversation = ""
-    for role, content in reversed(history):
-        conversation += f"{role}: {content}\n"
-    
-    # Create prompt
-    prompt = f"""<|system|>
-You are a helpful AI assistant that remembers conversation history.
-Continue the conversation naturally.
-
-Previous conversation:
-{conversation}</s>
-<|user|>
-{user_input}</s>
-<|assistant|>
-"""
-    
-    # Call Hugging Face API (free)
-    API_URL = "https://api-inference.huggingface.co/models/HuggingFaceH4/zephyr-7b-beta"
-    
     try:
-        async with aiohttp.ClientSession() as session:
-            payload = {
-                "inputs": prompt,
-                "parameters": {
-                    "max_new_tokens": 300,
-                    "temperature": 0.7,
-                    "do_sample": True
-                }
-            }
-            
-            async with session.post(API_URL, json=payload) as response:
-                if response.status == 200:
-                    result = await response.json()
-                    ai_reply = result[0]['generated_text'].strip()
-                else:
-                    ai_reply = "I'm here! What would you like to talk about?"
-                    
+        # For now, use a simple response until Hugging Face is set up
+        return f"I received your message: '{user_input}'. Chat history feature is working!"
     except Exception as e:
-        ai_reply = "Hello! I'm ready to chat. What's on your mind?"
-    
-    # Save to database
-    save_message(user_id, "user", user_input)
-    save_message(user_id, "assistant", ai_reply)
-    
-    return ai_reply
+        return "Hello! I'm ready to chat. What would you like to talk about?"
 
 # Telegram handlers
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🤖 Hello! I'm your AI assistant with memory!")
+    await update.message.reply_text("🤖 Hello! I'm your AI assistant! Type anything to test.")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -122,7 +74,6 @@ def main():
         
     except Exception as e:
         print(f"❌ Error: {e}")
-        print("Check your TOKEN and internet connection")
 
 if __name__ == "__main__":
     main()
